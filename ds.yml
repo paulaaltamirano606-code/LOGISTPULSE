@@ -1,0 +1,15 @@
+apiVersion: 1
+datasources:
+  - name: LogistPulse DW
+    uid: lp-pg
+    type: grafana-postgresql-datasource
+    access: proxy
+    url: postgres:5432
+    user: lp_reader
+    isDefault: true
+    secureJsonData:
+      password: lp_reader
+    jsonData:
+      database: logistpulse
+      sslmode: disable
+      postgresVersion: 1600

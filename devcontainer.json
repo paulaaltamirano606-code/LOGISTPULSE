@@ -1,0 +1,16 @@
+{
+  "name": "logistpulse-lakehouse",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "forwardPorts": [3000, 9001, 8888, 5432],
+  "portsAttributes": {
+    "3000": { "label": "Grafana (admin/admin)" },
+    "9001": { "label": "MinIO Console (minioadmin/minioadmin123)" },
+    "8888": { "label": "JupyterLab" },
+    "5432": { "label": "Postgres (lp/lp_secret, lector: lp_reader/lp_reader)" }
+  },
+  "hostRequirements": { "cpus": 4, "memory": "8gb" },
+  "postStartCommand": "docker compose version"
+}

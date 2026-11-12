@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: logistpulse
+    folder: LOGISTPULSE
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

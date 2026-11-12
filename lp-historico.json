@@ -1,0 +1,293 @@
+{
+ "uid": "lp-historico",
+ "title": "LOGISTPULSE · Histórico y operación (DW)",
+ "schemaVersion": 39,
+ "version": 1,
+ "editable": true,
+ "refresh": "",
+ "time": {
+  "from": "now-150d",
+  "to": "now"
+ },
+ "tags": [
+  "logistpulse"
+ ],
+ "panels": [
+  {
+   "id": 1,
+   "title": "OTIF últimos 30 días (%)",
+   "type": "stat",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "lp-pg"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 6,
+    "h": 5
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "lp-pg"
+     },
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT ROUND(100.0*COUNT(*) FILTER (WHERE on_time)/NULLIF(COUNT(on_time),0),1) AS otif FROM semantic.v_shipments WHERE status='DELIVERED' AND date >= current_date - 30"
+    }
+   ],
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": ""
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 70
+       },
+       {
+        "color": "green",
+        "value": 85
+       }
+      ]
+     }
+    },
+    "overrides": []
+   }
+  },
+  {
+   "id": 2,
+   "title": "Despachos en tránsito",
+   "type": "stat",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "lp-pg"
+   },
+   "gridPos": {
+    "x": 6,
+    "y": 0,
+    "w": 6,
+    "h": 5
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "lp-pg"
+     },
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT COUNT(*) AS en_transito FROM semantic.v_shipments WHERE status='IN_TRANSIT'"
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "title": "Ingresos entregados 30 días (USD)",
+   "type": "stat",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "lp-pg"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 0,
+    "w": 6,
+    "h": 5
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "lp-pg"
+     },
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT SUM(order_value_usd) AS usd FROM semantic.v_shipments WHERE status='DELIVERED' AND date >= current_date - 30"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "currencyUSD"
+    },
+    "overrides": []
+   }
+  },
+  {
+   "id": 4,
+   "title": "% de entregas tarde con lluvia (>10 mm)",
+   "type": "stat",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "lp-pg"
+   },
+   "gridPos": {
+    "x": 18,
+    "y": 0,
+    "w": 6,
+    "h": 5
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "lp-pg"
+     },
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT ROUND(100.0*COUNT(*) FILTER (WHERE NOT on_time)/NULLIF(COUNT(*),0),1) AS pct_tarde FROM semantic.v_shipments WHERE status='DELIVERED' AND rain_mm > 10"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent"
+    },
+    "overrides": []
+   }
+  },
+  {
+   "id": 5,
+   "title": "OTIF diario por centro de distribución (mart_ops)",
+   "type": "timeseries",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "lp-pg"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 5,
+    "w": 14,
+    "h": 9
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "lp-pg"
+     },
+     "refId": "A",
+     "format": "time_series",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT date::timestamp AS time, depot AS metric, otif_pct FROM mart_ops.daily_depot_kpis WHERE $__timeFilter(date::timestamp) ORDER BY 1"
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "title": "OTIF por transportista (cubo OLAP)",
+   "type": "barchart",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "lp-pg"
+   },
+   "gridPos": {
+    "x": 14,
+    "y": 5,
+    "w": 10,
+    "h": 9
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "lp-pg"
+     },
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT carrier, otif_pct FROM semantic.mv_cube_otif WHERE carrier IS NOT NULL AND year IS NULL AND depot IS NULL AND segment IS NULL ORDER BY otif_pct DESC"
+    }
+   ],
+   "options": {
+    "xField": "carrier",
+    "legend": {
+     "showLegend": false
+    }
+   }
+  },
+  {
+   "id": 7,
+   "title": "Atraso medio vs lluvia (dato de terceros del Data Lake)",
+   "type": "barchart",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "lp-pg"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 14,
+    "w": 12,
+    "h": 9
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "lp-pg"
+     },
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT (FLOOR(rain_mm/5)*5)::int::text || ' mm' AS lluvia, ROUND(AVG(delay_min)::numeric,0) AS atraso_medio_min, ROUND(100.0*COUNT(*) FILTER (WHERE NOT on_time)/COUNT(*),1) AS pct_tarde FROM semantic.v_shipments WHERE status='DELIVERED' AND rain_mm IS NOT NULL GROUP BY FLOOR(rain_mm/5) ORDER BY FLOOR(rain_mm/5)"
+    }
+   ],
+   "options": {
+    "xField": "lluvia"
+   }
+  },
+  {
+   "id": 8,
+   "title": "Riesgo de atraso en tránsito (ML)",
+   "type": "table",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "lp-pg"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 14,
+    "w": 12,
+    "h": 9
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "lp-pg"
+     },
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "SELECT shipment_id, depot, carrier, customer, ROUND(distance_km,1) AS km, ROUND(p_late*100,1) AS riesgo_pct FROM mart_ops.delay_risk_in_transit LIMIT 15"
+    }
+   ]
+  }
+ ]
+}

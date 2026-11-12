@@ -1,0 +1,148 @@
+name: logistpulse
+
+x-env: &env
+  PGHOST: postgres
+  PGDATABASE: logistpulse
+  PGUSER: lp
+  PGPASSWORD: lp_secret
+  S3_ENDPOINT: http://minio:9000
+  S3_ACCESS_KEY: minioadmin
+  S3_SECRET_KEY: minioadmin123
+  KAFKA_BOOTSTRAP: redpanda:9092
+
+x-tools: &tools
+  build: ./services
+  image: logistpulse-tools
+  environment: *env
+
+services:
+  # ---------- Almacenamiento: ODS + Master + DW + marts + capa semántica ----------
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: logistpulse
+      POSTGRES_USER: lp
+      POSTGRES_PASSWORD: lp_secret
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lp -d logistpulse"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # ---------- Data Lake (S3 compatible) ----------
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports: ["9000:9000", "9001:9001"]
+    volumes: ["miniodata:/data"]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio: { condition: service_healthy }
+    entrypoint: >
+      /bin/sh -c "mc alias set lp http://minio:9000 minioadmin minioadmin123 &&
+                  mc mb --ignore-existing lp/lake-raw lp/lake-curated"
+
+  # ---------- Streaming (API compatible con Kafka) ----------
+  redpanda:
+    image: redpandadata/redpanda:v24.2.7
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --memory=512M
+      - --kafka-addr=internal://0.0.0.0:9092
+      - --advertise-kafka-addr=internal://redpanda:9092
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true'"]
+      interval: 8s
+      timeout: 5s
+      retries: 20
+    profiles: ["streaming"]
+
+  # ---------- Trabajos por lotes (se ejecutan con `make seed|etl|ml`) ----------
+  seed:
+    <<: *tools
+    command: python -m lp.seed
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
+    profiles: ["jobs"]
+
+  etl:
+    <<: *tools
+    command: python -m lp.etl
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
+    profiles: ["jobs"]
+
+  ml:
+    <<: *tools
+    command: python -m lp.ml
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
+    profiles: ["jobs"]
+
+  # ---------- Streaming: sensores -> Redpanda -> ODS / Lake / alertas ----------
+  producer:
+    <<: *tools
+    command: python -m lp.producer
+    depends_on:
+      postgres: { condition: service_healthy }
+      redpanda: { condition: service_healthy }
+    restart: on-failure
+    profiles: ["streaming"]
+
+  consumer:
+    <<: *tools
+    command: python -m lp.consumer
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
+      redpanda: { condition: service_healthy }
+    restart: on-failure
+    profiles: ["streaming"]
+
+  # ---------- Presentación y análisis ----------
+  grafana:
+    image: grafana/grafana:11.2.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/lp-historico.json
+    ports: ["3000:3000"]
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  jupyter:
+    <<: *tools
+    command: jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root --notebook-dir=/notebooks --ServerApp.token= --ServerApp.password=
+    ports: ["8888:8888"]
+    volumes: ["./notebooks:/notebooks"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    profiles: ["lab"]
+
+volumes:
+  pgdata:
+  miniodata:
